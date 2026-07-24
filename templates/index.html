@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spam message prediction</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --ink: #0A0E1A;
+            --panel: #121A2B;
+            --panel-border: #223049;
+            --teal: #2DD4BF;
+            --teal-dim: #1B8F82;
+            --coral: #FF6B6B;
+            --fog: #E7ECF3;
+            --mist: #8A93A8;
+            --mono: 'IBM Plex Mono', monospace;
+            --display: 'Space Grotesk', sans-serif;
+            --body: 'Inter', sans-serif;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        html, body { height: 100%; }
+
+        body {
+            background: var(--ink);
+            color: var(--fog);
+            font-family: var(--body);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 48px 20px;
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        /* ---------- ambient console grid ---------- */
+        .grid-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            pointer-events: none;
+            background-image:
+                linear-gradient(rgba(255,255,255,0.035) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.035) 1px, transparent 1px);
+            background-size: 40px 40px;
+        }
+
+        /* ---------- radar / signal-scanner signature ---------- */
+        .radar-field {
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+            opacity: 0.55;
+        }
+
+        .radar-rings {
+            position: relative;
+            width: min(90vmin, 780px);
+            height: min(90vmin, 780px);
+            border-radius: 50%;
+            overflow: hidden;
+            background: repeating-radial-gradient(
+                circle at center,
+                transparent 0,
+                transparent 59px,
+                rgba(45, 212, 191, 0.12) 60px,
+                transparent 61px
+            );
+            border: 1px solid rgba(45, 212, 191, 0.14);
+        }
+
+        .radar-sweep { position: absolute; inset: 0; }
+        .radar-sweep::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: conic-gradient(
+                from 0deg,
+                transparent 0deg,
+                transparent 300deg,
+                rgba(45, 212, 191, 0.30) 340deg,
+                rgba(45, 212, 191, 0.55) 358deg,
+                transparent 360deg
+            );
+            animation: sweepRotate 6s linear infinite;
+        }
+
+        @keyframes sweepRotate { to { transform: rotate(360deg); } }
+
+        .blip {
+            position: absolute;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--coral);
+            box-shadow: 0 0 12px 2px rgba(255, 107, 107, 0.55);
+            animation: blipPulse 2.6s ease-in-out infinite;
+        }
+
+        @keyframes blipPulse {
+            0%, 100% { opacity: 0.25; transform: scale(0.8); }
+            50% { opacity: 1; transform: scale(1.15); }
+        }
+
+        /* ---------- layout ---------- */
+        .wrap {
+            position: relative;
+            z-index: 1;
+            width: 100%;
+            max-width: 560px;
+            display: flex;
+            flex-direction: column;
+            gap: 32px;
+        }
+
+        .masthead {
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .eyebrow {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            font-family: var(--mono);
+            font-size: 12px;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: var(--mist);
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--teal);
+            box-shadow: 0 0 8px 2px rgba(45, 212, 191, 0.7);
+            animation: dotPulse 2s ease-in-out infinite;
+        }
+
+        @keyframes dotPulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
+        h1 {
+            font-family: var(--display);
+            font-weight: 600;
+            font-size: clamp(28px, 5vw, 40px);
+            line-height: 1.15;
+            letter-spacing: -0.01em;
+        }
+
+        .accent { color: var(--teal); }
+        .accent-coral { color: var(--coral); }
+
+        .sub {
+            color: var(--mist);
+            font-size: 15px;
+            max-width: 420px;
+            margin: 0 auto;
+        }
+
+        /* ---------- console panel ---------- */
+        .console {
+            position: relative;
+            background: linear-gradient(180deg, rgba(255,255,255,0.03), transparent 40%), var(--panel);
+            border: 1px solid var(--panel-border);
+            border-radius: 16px;
+            padding: 32px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.03);
+            animation: panelRise 0.6s ease both;
+        }
+
+        @keyframes panelRise {
+            from { opacity: 0; transform: translateY(14px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .console::before, .console::after {
+            content: '';
+            position: absolute;
+            width: 18px;
+            height: 18px;
+            border-color: rgba(45, 212, 191, 0.5);
+            border-style: solid;
+        }
+        .console::before { top: 10px; left: 10px; border-width: 1px 0 0 1px; }
+        .console::after { bottom: 10px; right: 10px; border-width: 0 1px 1px 0; }
+
+        .scan-form {
+            display: flex;
+            flex-direction: column;
+            gap: 22px;
+        }
+
+        .field { display: flex; flex-direction: column; gap: 8px; }
+
+        .field label {
+            font-family: var(--mono);
+            font-size: 12px;
+            letter-spacing: 0.08em;
+            color: var(--mist);
+        }
+
+        .field input[type="text"] {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid var(--panel-border);
+            border-radius: 8px;
+            padding: 12px 14px;
+            color: var(--fog);
+            font-family: var(--body);
+            font-size: 15px;
+            width: 100%;
+            transition: border-color .25s ease, box-shadow .25s ease, background .25s ease;
+        }
+
+        .field input::placeholder { color: #4C566E; }
+
+        .field input:hover { border-color: rgba(45, 212, 191, 0.45); }
+
+        .field input:focus {
+            outline: none;
+            border-color: var(--teal);
+            box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.15);
+            background: rgba(255,255,255,0.05);
+        }
+
+        .meter {
+            height: 4px;
+            border-radius: 2px;
+            background: rgba(255,255,255,0.06);
+            overflow: hidden;
+        }
+
+        .meter-fill {
+            height: 100%;
+            width: 0%;
+            border-radius: 2px;
+            background: linear-gradient(90deg, var(--teal-dim), var(--teal));
+            transition: width .2s ease, background .2s ease;
+        }
+
+        .meter-readout {
+            font-family: var(--mono);
+            font-size: 11px;
+            color: var(--mist);
+            letter-spacing: 0.04em;
+        }
+
+        .scan-btn {
+            appearance: none;
+            border: none;
+            cursor: pointer;
+            margin-top: 6px;
+            padding: 14px 20px;
+            border-radius: 10px;
+            font-family: var(--display);
+            font-weight: 600;
+            font-size: 15px;
+            letter-spacing: 0.01em;
+            color: #08130F;
+            background: linear-gradient(120deg, var(--teal) 0%, #6FEFD3 50%, var(--teal) 100%);
+            background-size: 200% 100%;
+            background-position: 0% 0%;
+            box-shadow: 0 8px 24px rgba(45, 212, 191, 0.25);
+            transition: background-position .5s ease, transform .15s ease, box-shadow .25s ease;
+        }
+
+        .scan-btn:hover {
+            background-position: 100% 0%;
+            transform: translateY(-2px);
+            box-shadow: 0 12px 32px rgba(45, 212, 191, 0.35);
+        }
+
+        .scan-btn:active { transform: translateY(0) scale(0.98); }
+
+        .scan-btn:focus-visible {
+            outline: 2px solid var(--fog);
+            outline-offset: 3px;
+        }
+
+        .scan-btn.is-scanning { animation: scanningPulse .6s ease-in-out infinite; }
+
+        @keyframes scanningPulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .footnote {
+            text-align: center;
+            font-family: var(--mono);
+            font-size: 11.5px;
+            color: #5B6478;
+            letter-spacing: 0.03em;
+        }
+
+        @media (max-width: 480px) {
+            .console { padding: 24px; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .radar-sweep::before, .status-dot, .blip, .scan-btn.is-scanning, .console {
+                animation: none !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="grid-overlay" aria-hidden="true"></div>
+    <div class="radar-field" aria-hidden="true">
+        <div class="radar-rings">
+            <div class="radar-sweep"></div>
+            <span class="blip" style="top: 22%; left: 64%; animation-delay: 0s;"></span>
+            <span class="blip" style="top: 68%; left: 30%; animation-delay: 0.9s;"></span>
+            <span class="blip" style="top: 45%; left: 78%; animation-delay: 1.8s;"></span>
+        </div>
+    </div>
+
+    <main class="wrap">
+        <header class="masthead">
+            <div class="eyebrow"><span class="status-dot"></span>SYS.01 &mdash; MESSAGE SCANNER</div>
+            <h1>Is this message<br><span class="accent">signal</span> or <span class="accent-coral">noise?</span></h1>
+            <p class="sub">Enter a message below and the model will tell you whether it looks like spam.</p>
+        </header>
+
+        <section class="console">
+            <Form method="POST" action="" class="scan-form">
+                <div class="field">
+                    <label for="opName">&gt; operator name</label>
+                    <input type="text" id="opName" name='inp1' placeholder="e.g. Priya" autocomplete="off">
+                </div>
+                <div class="field">
+                    <label for="msgPayload">&gt; message payload</label>
+                    <input type="text" id="msgPayload" name='inp2' placeholder="Paste or type the message to scan…" autocomplete="off">
+                    <div class="meter"><div class="meter-fill" id="meterFill"></div></div>
+                    <div class="meter-readout"><span id="charCount">0</span>/160 chars &middot; SMS segment</div>
+                </div>
+                <input type="submit" class="scan-btn" value="Scan message →">
+            </Form>
+        </section>
+
+        <footer class="footnote">Analysis runs through a trained NLP classification model.</footer>
+    </main>
+
+    <script>
+        var msg = document.getElementById('msgPayload');
+        var fill = document.getElementById('meterFill');
+        var count = document.getElementById('charCount');
+        if (msg) {
+            msg.addEventListener('input', function () {
+                var len = msg.value.length;
+                count.textContent = len;
+                var pct = Math.min(len / 160, 1) * 100;
+                fill.style.width = pct + '%';
+                fill.style.background = len > 160
+                    ? 'var(--coral)'
+                    : 'linear-gradient(90deg, var(--teal-dim), var(--teal))';
+            });
+        }
+
+        var form = document.querySelector('.scan-form');
+        var btn = document.querySelector('.scan-btn');
+        if (form && btn) {
+            form.addEventListener('submit', function () {
+                btn.classList.add('is-scanning');
+                // no preventDefault here — the form still submits to app.py exactly as before
+            });
+        }
+    </script>
+</body>
+</html>
